@@ -337,6 +337,60 @@ describe('getUsage', () => {
       await rm(customConfigDir, { recursive: true, force: true });
     }
   });
+
+  test('uses separate cache for different CLAUDE_CONFIG_DIR', async () => {
+    const home1 = await createTempHome();
+    const home2 = await createTempHome();
+    const sharedHome = await createTempHome();
+    const originalEnv = process.env.CLAUDE_CONFIG_DIR;
+
+    try {
+      // First config - write cache
+      process.env.CLAUDE_CONFIG_DIR = home1;
+      await mkdir(home1, { recursive: true });
+      await writeFile(path.join(home1, '.credentials.json'), JSON.stringify(buildCredentials()), 'utf8');
+
+      let fetchCount = 0;
+      await getUsage({
+        homeDir: () => sharedHome,
+        fetchApi: async () => {
+          fetchCount++;
+          return buildApiResult({ five_hour: { utilization: 25 } });
+        },
+        now: () => 1000,
+        readKeychain: () => null,
+      });
+
+      assert.equal(fetchCount, 1);
+
+      // Second config - should not use first config's cache
+      process.env.CLAUDE_CONFIG_DIR = home2;
+      await mkdir(home2, { recursive: true });
+      await writeFile(path.join(home2, '.credentials.json'), JSON.stringify(buildCredentials()), 'utf8');
+
+      await getUsage({
+        homeDir: () => sharedHome,
+        fetchApi: async () => {
+          fetchCount++;
+          return buildApiResult({ five_hour: { utilization: 50 } });
+        },
+        now: () => 1000,
+        readKeychain: () => null,
+      });
+
+      // Should have fetched again (cache miss)
+      assert.equal(fetchCount, 2);
+    } finally {
+      if (originalEnv === undefined) {
+        delete process.env.CLAUDE_CONFIG_DIR;
+      } else {
+        process.env.CLAUDE_CONFIG_DIR = originalEnv;
+      }
+      await rm(home1, { recursive: true, force: true });
+      await rm(home2, { recursive: true, force: true });
+      await rm(sharedHome, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('getUsage caching behavior', () => {

@@ -65,7 +65,8 @@ interface CacheFile {
 }
 
 function getCachePath(homeDir: string): string {
-  return path.join(homeDir, '.claude', 'plugins', 'claude-hud', '.usage-cache.json');
+  const configDir = getConfigDir(homeDir);
+  return path.join(configDir, 'plugins', 'claude-hud', '.usage-cache.json');
 }
 
 function readCache(homeDir: string, now: number): UsageData | null {
