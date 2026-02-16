@@ -208,16 +208,19 @@ export async function getUsage(overrides: Partial<UsageApiDeps> = {}): Promise<U
 /**
  * Get path for keychain failure backoff cache.
  * Separate from usage cache to track keychain-specific failures.
+ * Exported for testing.
  */
-function getKeychainBackoffPath(homeDir: string): string {
-  return path.join(homeDir, '.claude', 'plugins', 'claude-hud', '.keychain-backoff');
+export function getKeychainBackoffPath(homeDir: string): string {
+  const configDir = getConfigDir(homeDir);
+  return path.join(configDir, 'plugins', 'claude-hud', '.keychain-backoff');
 }
 
 /**
  * Check if we're in keychain backoff period (recent failure/timeout).
  * Prevents re-prompting user on every render cycle.
+ * Exported for testing.
  */
-function isKeychainBackoff(homeDir: string, now: number): boolean {
+export function isKeychainBackoff(homeDir: string, now: number): boolean {
   try {
     const backoffPath = getKeychainBackoffPath(homeDir);
     if (!fs.existsSync(backoffPath)) return false;
@@ -230,8 +233,9 @@ function isKeychainBackoff(homeDir: string, now: number): boolean {
 
 /**
  * Record keychain failure for backoff.
+ * Exported for testing.
  */
-function recordKeychainFailure(homeDir: string, now: number): void {
+export function recordKeychainFailure(homeDir: string, now: number): void {
   try {
     const backoffPath = getKeychainBackoffPath(homeDir);
     const dir = path.dirname(backoffPath);

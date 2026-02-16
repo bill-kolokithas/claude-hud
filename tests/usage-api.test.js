@@ -1,6 +1,6 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { getUsage, clearCache, getConfigDir } from '../dist/usage-api.js';
+import { getUsage, clearCache, getConfigDir, recordKeychainFailure, isKeychainBackoff } from '../dist/usage-api.js';
 import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -389,6 +389,98 @@ describe('getUsage', () => {
       await rm(home1, { recursive: true, force: true });
       await rm(home2, { recursive: true, force: true });
       await rm(sharedHome, { recursive: true, force: true });
+    }
+  });
+
+  test('uses separate keychain backoff for different CLAUDE_CONFIG_DIR', async () => {
+    // This test verifies that keychain backoff tracking is isolated per config
+    const home1 = await createTempHome();
+    const home2 = await createTempHome();
+    const originalEnv = process.env.CLAUDE_CONFIG_DIR;
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
+
+    try {
+      // Mock macOS platform for keychain test
+      Object.defineProperty(process, 'platform', {
+        value: 'darwin',
+        configurable: true,
+      });
+
+      // First config - trigger keychain failure (will set backoff)
+      process.env.CLAUDE_CONFIG_DIR = home1;
+      await writeCredentials(home1, buildCredentials());
+
+      let keychainCalls = 0;
+      const homeDir = '/home/user';
+      const now1 = 1000;
+
+      await getUsage({
+        homeDir: () => homeDir,
+        fetchApi: async () => buildApiResult(),
+        now: () => now1,
+        readKeychain: (now, hd) => {
+          keychainCalls++;
+          // Manually record backoff since we're bypassing the default implementation
+          recordKeychainFailure(hd, now);
+          throw new Error('Keychain timeout');
+        },
+      });
+
+      // Keychain should have been called once and failed
+      assert.equal(keychainCalls, 1);
+
+      // Second call in same config - should be in backoff (no keychain call)
+      const now2 = 2000;
+      await getUsage({
+        homeDir: () => homeDir,
+        fetchApi: async () => buildApiResult(),
+        now: () => now2,
+        readKeychain: (now, hd) => {
+          // Check backoff before incrementing counter
+          if (!isKeychainBackoff(hd, now)) {
+            keychainCalls++;
+            recordKeychainFailure(hd, now);
+            throw new Error('Keychain timeout');
+          }
+          return null;
+        },
+      });
+
+      assert.equal(keychainCalls, 1); // Still 1 - backoff prevented retry
+
+      // Different config - should attempt keychain again (no backoff)
+      process.env.CLAUDE_CONFIG_DIR = home2;
+      await writeCredentials(home2, buildCredentials());
+
+      const now3 = 3000;
+      await getUsage({
+        homeDir: () => homeDir,
+        fetchApi: async () => buildApiResult(),
+        now: () => now3,
+        readKeychain: (now, hd) => {
+          // Check backoff before incrementing counter
+          if (!isKeychainBackoff(hd, now)) {
+            keychainCalls++;
+            recordKeychainFailure(hd, now);
+            throw new Error('Keychain timeout');
+          }
+          return null;
+        },
+      });
+
+      // Should have attempted keychain for new config
+      assert.equal(keychainCalls, 2);
+    } finally {
+      if (originalEnv === undefined) {
+        delete process.env.CLAUDE_CONFIG_DIR;
+      } else {
+        process.env.CLAUDE_CONFIG_DIR = originalEnv;
+      }
+      if (originalPlatform) {
+        Object.defineProperty(process, 'platform', originalPlatform);
+      }
+      await rm(home1, { recursive: true, force: true });
+      await rm(home2, { recursive: true, force: true });
     }
   });
 });
