@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
+import { getConfigDir } from './usage-api.js';
 export const DEFAULT_CONFIG = {
     lineLayout: 'expanded',
     showSeparators: false,
@@ -32,7 +33,8 @@ export const DEFAULT_CONFIG = {
 };
 export function getConfigPath() {
     const homeDir = os.homedir();
-    return path.join(homeDir, '.claude', 'plugins', 'claude-hud', 'config.json');
+    const configDir = getConfigDir(homeDir);
+    return path.join(configDir, 'plugins', 'claude-hud', 'config.json');
 }
 function validatePathLevels(value) {
     return value === 1 || value === 2 || value === 3;

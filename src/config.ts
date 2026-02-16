@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
+import { getConfigDir } from './usage-api.js';
 
 export type LineLayoutType = 'compact' | 'expanded';
 
@@ -69,7 +70,8 @@ export const DEFAULT_CONFIG: HudConfig = {
 
 export function getConfigPath(): string {
   const homeDir = os.homedir();
-  return path.join(homeDir, '.claude', 'plugins', 'claude-hud', 'config.json');
+  const configDir = getConfigDir(homeDir);
+  return path.join(configDir, 'plugins', 'claude-hud', 'config.json');
 }
 
 function validatePathLevels(value: unknown): value is 1 | 2 | 3 {

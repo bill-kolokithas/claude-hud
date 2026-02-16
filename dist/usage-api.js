@@ -5,13 +5,29 @@ import * as https from 'https';
 import { execFileSync } from 'child_process';
 import { createDebug } from './debug.js';
 const debug = createDebug('usage');
+/**
+ * Get the Claude config directory, respecting CLAUDE_CONFIG_DIR environment variable.
+ * This allows using multiple Claude Code configurations (e.g., personal and work accounts).
+ *
+ * @param homeDir - The user's home directory
+ * @returns The config directory path (either from env var or default ~/.claude)
+ */
+export function getConfigDir(homeDir) {
+    const configDir = process.env.CLAUDE_CONFIG_DIR;
+    // Return default if not set or empty string
+    if (!configDir) {
+        return path.join(homeDir, '.claude');
+    }
+    return configDir;
+}
 // File-based cache (HUD runs as new process each render, so in-memory cache won't persist)
 const CACHE_TTL_MS = 60_000; // 60 seconds
 const CACHE_FAILURE_TTL_MS = 15_000; // 15 seconds for failed requests
 const KEYCHAIN_TIMEOUT_MS = 5000;
 const KEYCHAIN_BACKOFF_MS = 60_000; // Backoff on keychain failures to avoid re-prompting
 function getCachePath(homeDir) {
-    return path.join(homeDir, '.claude', 'plugins', 'claude-hud', '.usage-cache.json');
+    const configDir = getConfigDir(homeDir);
+    return path.join(configDir, 'plugins', 'claude-hud', '.usage-cache.json');
 }
 function readCache(homeDir, now) {
     try {
@@ -129,15 +145,18 @@ export async function getUsage(overrides = {}) {
 /**
  * Get path for keychain failure backoff cache.
  * Separate from usage cache to track keychain-specific failures.
+ * Exported for testing.
  */
-function getKeychainBackoffPath(homeDir) {
-    return path.join(homeDir, '.claude', 'plugins', 'claude-hud', '.keychain-backoff');
+export function getKeychainBackoffPath(homeDir) {
+    const configDir = getConfigDir(homeDir);
+    return path.join(configDir, 'plugins', 'claude-hud', '.keychain-backoff');
 }
 /**
  * Check if we're in keychain backoff period (recent failure/timeout).
  * Prevents re-prompting user on every render cycle.
+ * Exported for testing.
  */
-function isKeychainBackoff(homeDir, now) {
+export function isKeychainBackoff(homeDir, now) {
     try {
         const backoffPath = getKeychainBackoffPath(homeDir);
         if (!fs.existsSync(backoffPath))
@@ -151,8 +170,9 @@ function isKeychainBackoff(homeDir, now) {
 }
 /**
  * Record keychain failure for backoff.
+ * Exported for testing.
  */
-function recordKeychainFailure(homeDir, now) {
+export function recordKeychainFailure(homeDir, now) {
     try {
         const backoffPath = getKeychainBackoffPath(homeDir);
         const dir = path.dirname(backoffPath);
@@ -206,7 +226,8 @@ function readKeychainCredentials(now, homeDir) {
  * Older versions of Claude Code stored credentials in ~/.claude/.credentials.json
  */
 function readFileCredentials(homeDir, now) {
-    const credentialsPath = path.join(homeDir, '.claude', '.credentials.json');
+    const configDir = getConfigDir(homeDir);
+    const credentialsPath = path.join(configDir, '.credentials.json');
     if (!fs.existsSync(credentialsPath)) {
         return null;
     }
