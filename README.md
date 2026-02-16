@@ -224,6 +224,55 @@ To disable, set `display.showUsage` to `false`.
 
 ---
 
+## Multi-Account Setup
+
+If you use multiple Claude Code accounts (e.g., personal and work), you can run separate configurations using the `CLAUDE_CONFIG_DIR` environment variable.
+
+### Setup
+
+1. Create a separate config directory:
+   ```bash
+   mkdir -p ~/.claude-work
+   ```
+
+2. Launch Claude Code with the custom config:
+   ```bash
+   CLAUDE_CONFIG_DIR=~/.claude-work claude
+   ```
+
+3. Log in with your work account and install claude-hud:
+   ```
+   /plugin install claude-hud
+   /claude-hud:setup
+   ```
+
+Each config directory maintains its own:
+- Credentials (`.credentials.json`)
+- Usage cache (properly isolated per account)
+- Plugin configuration (separate HUD settings)
+- Session data
+
+The HUD will automatically show usage limits for whichever account you're logged into.
+
+### Example
+
+```bash
+# Personal account (default)
+claude
+
+# Work account (custom config)
+CLAUDE_CONFIG_DIR=~/.claude-work claude
+```
+
+You can create shell aliases for convenience:
+
+```bash
+# Add to ~/.bashrc or ~/.zshrc
+alias claude-work='CLAUDE_CONFIG_DIR=~/.claude-work claude'
+```
+
+---
+
 ## Requirements
 
 - Claude Code v1.0.80+
