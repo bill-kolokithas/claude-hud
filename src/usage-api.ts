@@ -10,6 +10,22 @@ export type { UsageData } from './types.js';
 
 const debug = createDebug('usage');
 
+/**
+ * Get the Claude config directory, respecting CLAUDE_CONFIG_DIR environment variable.
+ * This allows using multiple Claude Code configurations (e.g., personal and work accounts).
+ *
+ * @param homeDir - The user's home directory
+ * @returns The config directory path (either from env var or default ~/.claude)
+ */
+export function getConfigDir(homeDir: string): string {
+  const configDir = process.env.CLAUDE_CONFIG_DIR;
+  // Return default if not set or empty string
+  if (!configDir) {
+    return path.join(homeDir, '.claude');
+  }
+  return configDir;
+}
+
 interface CredentialsFile {
   claudeAiOauth?: {
     accessToken?: string;
@@ -276,15 +292,14 @@ function readKeychainCredentials(now: number, homeDir: string): { accessToken: s
  * Older versions of Claude Code stored credentials in ~/.claude/.credentials.json
  */
 function readFileCredentials(homeDir: string, now: number): { accessToken: string; subscriptionType: string } | null {
-  const credentialsPath = path.join(homeDir, '.claude', '.credentials.json');
-
+  const configDir = getConfigDir(homeDir);
+  const credentialsPath = path.join(configDir, '.credentials.json');
   if (!fs.existsSync(credentialsPath)) {
     return null;
   }
-
   try {
     const content = fs.readFileSync(credentialsPath, 'utf8');
-    const data: CredentialsFile = JSON.parse(content);
+    const data = JSON.parse(content);
     return parseCredentialsData(data, now);
   } catch (error) {
     debug('Failed to read credentials file:', error);

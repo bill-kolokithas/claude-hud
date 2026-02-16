@@ -1,6 +1,6 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { getUsage, clearCache } from '../dist/usage-api.js';
+import { getUsage, clearCache, getConfigDir } from '../dist/usage-api.js';
 import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -49,13 +49,62 @@ function buildApiResult(overrides = {}) {
   };
 }
 
+describe('getConfigDir', () => {
+  test('returns CLAUDE_CONFIG_DIR when set', () => {
+    const originalEnv = process.env.CLAUDE_CONFIG_DIR;
+    try {
+      process.env.CLAUDE_CONFIG_DIR = '/custom/config';
+      const result = getConfigDir('/home/user');
+      assert.equal(result, '/custom/config');
+    } finally {
+      if (originalEnv === undefined) {
+        delete process.env.CLAUDE_CONFIG_DIR;
+      } else {
+        process.env.CLAUDE_CONFIG_DIR = originalEnv;
+      }
+    }
+  });
+
+  test('returns default ~/.claude when CLAUDE_CONFIG_DIR not set', () => {
+    const originalEnv = process.env.CLAUDE_CONFIG_DIR;
+    try {
+      delete process.env.CLAUDE_CONFIG_DIR;
+      const result = getConfigDir('/home/user');
+      assert.equal(result, '/home/user/.claude');
+    } finally {
+      if (originalEnv !== undefined) {
+        process.env.CLAUDE_CONFIG_DIR = originalEnv;
+      }
+    }
+  });
+
+  test('returns default ~/.claude when CLAUDE_CONFIG_DIR is empty string', () => {
+    const originalEnv = process.env.CLAUDE_CONFIG_DIR;
+    try {
+      process.env.CLAUDE_CONFIG_DIR = '';
+      const result = getConfigDir('/home/user');
+      assert.equal(result, '/home/user/.claude');
+    } finally {
+      if (originalEnv === undefined) {
+        delete process.env.CLAUDE_CONFIG_DIR;
+      } else {
+        process.env.CLAUDE_CONFIG_DIR = originalEnv;
+      }
+    }
+  });
+});
+
 describe('getUsage', () => {
   beforeEach(async () => {
     tempHome = await createTempHome();
     clearCache(tempHome);
+    // Ensure CLAUDE_CONFIG_DIR is not set from previous tests
+    delete process.env.CLAUDE_CONFIG_DIR;
   });
 
   afterEach(async () => {
+    // Clean up environment variable
+    delete process.env.CLAUDE_CONFIG_DIR;
     if (tempHome) {
       await rm(tempHome, { recursive: true, force: true });
       tempHome = null;
@@ -258,15 +307,49 @@ describe('getUsage', () => {
     assert.equal(second?.apiError, 'http-401');
     assert.equal(fetchCalls, 2);
   });
+
+  test('reads credentials from CLAUDE_CONFIG_DIR when set', async () => {
+    const customConfigDir = await createTempHome();
+    const originalEnv = process.env.CLAUDE_CONFIG_DIR;
+
+    try {
+      // Set custom config dir and create credentials there
+      process.env.CLAUDE_CONFIG_DIR = customConfigDir;
+      // Write credentials directly to the custom config dir
+      await mkdir(customConfigDir, { recursive: true });
+      await writeFile(path.join(customConfigDir, '.credentials.json'), JSON.stringify(buildCredentials()), 'utf8');
+
+      const result = await getUsage({
+        homeDir: () => '/some/other/path',  // Should be ignored
+        fetchApi: async () => buildApiResult(),
+        now: () => 1000,
+        readKeychain: () => null,
+      });
+
+      assert.notEqual(result, null);
+      assert.equal(result.planName, 'Pro');
+    } finally {
+      if (originalEnv === undefined) {
+        delete process.env.CLAUDE_CONFIG_DIR;
+      } else {
+        process.env.CLAUDE_CONFIG_DIR = originalEnv;
+      }
+      await rm(customConfigDir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('getUsage caching behavior', () => {
   beforeEach(async () => {
     tempHome = await createTempHome();
     clearCache(tempHome);
+    // Ensure CLAUDE_CONFIG_DIR is not set from previous tests
+    delete process.env.CLAUDE_CONFIG_DIR;
   });
 
   afterEach(async () => {
+    // Clean up environment variable
+    delete process.env.CLAUDE_CONFIG_DIR;
     if (tempHome) {
       await rm(tempHome, { recursive: true, force: true });
       tempHome = null;
