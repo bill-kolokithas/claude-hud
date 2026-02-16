@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { createDebug } from './debug.js';
+import { getConfigDir } from './usage-api.js';
 const debug = createDebug('config');
 function getMcpServerNames(filePath) {
     if (!fs.existsSync(filePath))
@@ -88,7 +89,7 @@ export async function countConfigs(cwd) {
     let rulesCount = 0;
     let hooksCount = 0;
     const homeDir = os.homedir();
-    const claudeDir = path.join(homeDir, '.claude');
+    const claudeDir = getConfigDir(homeDir);
     // Collect all MCP servers across scopes, then subtract disabled ones
     const userMcpServers = new Set();
     const projectMcpServers = new Set();
