@@ -1,13 +1,15 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
+import { getConfigDir } from './usage-api.js';
 const SPEED_WINDOW_MS = 2000;
 const defaultDeps = {
     homeDir: () => os.homedir(),
     now: () => Date.now(),
 };
 function getCachePath(homeDir) {
-    return path.join(homeDir, '.claude', 'plugins', 'claude-hud', '.speed-cache.json');
+    const configDir = getConfigDir(homeDir);
+    return path.join(configDir, 'plugins', 'claude-hud', '.speed-cache.json');
 }
 function readCache(homeDir) {
     try {
